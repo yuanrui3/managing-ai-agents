@@ -1,0 +1,10 @@
+{
+  "retentionSeed": 20261114,
+  "grid": {
+    "packIds": ["main-06", "main-11", "main-20", "main-01", "main-12", "main-18", "main-05", "main-13", "main-17", "main-02", "main-09", "main-14", "main-03", "main-08", "main-19", "main-04", "main-07", "main-15", "main-10", "main-16"],
+    "managerFamilies": ["qwen", "granite", "glm", "olmo", "mistral"],
+    "managerPolicies": ["always-top", "cheapest-passing", "manager-choice", "escalate-on-failure"],
+    "visibility": ["told", "not-told"],
+    "repeats": 2
+  }
+}

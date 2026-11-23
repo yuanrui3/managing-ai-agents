@@ -1,0 +1,9 @@
+runs/
+.env
+.env.*
+__pycache__/
+*.pyc
+/linkedin-pending.json
+/LOG.md
+/data/packs.json
+/scripts/verify-packs.mjs

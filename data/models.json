@@ -1,0 +1,144 @@
+{
+  "verifiedOn": "2026-11-14",
+  "basis": "Standard synchronous paid text API list price in USD per million tokens. Current generally accessible models exclude deprecated and access-limited models. Qwen prices are for Singapore International scope. Reasoning is billed at the output rate.",
+  "settings": {
+    "openai-top": {
+      "vendor": "openai",
+      "tier": "top",
+      "id": "gpt-6-astra",
+      "api": "openai",
+      "version": "Published model ID. No separate dated snapshot listed.",
+      "efforts": ["low", "medium", "high"],
+      "availableEfforts": ["low", "medium", "high", "xhigh", "max"],
+      "maxPromptTokens": 272000,
+      "rates": {"input": 10, "output": 50, "cachedRead": 1, "cachedWrite": 12.5},
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-6-astra",
+        "https://developers.openai.com/api/docs/pricing"
+      ]
+    },
+    "openai-cheap": {
+      "vendor": "openai",
+      "tier": "cheap",
+      "id": "gpt-6-luna",
+      "api": "openai",
+      "version": "Published model ID. No separate dated snapshot listed.",
+      "efforts": ["none", "medium", "high"],
+      "availableEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
+      "maxPromptTokens": 272000,
+      "rates": {"input": 0.10, "output": 0.50, "cachedRead": 0.01, "cachedWrite": 0.125},
+      "notes": "GPT-5 nano has a lower list rate and is deprecated, with shutdown scheduled for December 11, 2026.",
+      "sources": [
+        "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/deprecations"
+      ]
+    },
+    "anthropic-top": {
+      "vendor": "anthropic",
+      "tier": "top",
+      "id": "claude-fable-5-2",
+      "api": "anthropic",
+      "version": "Canonical pinned Anthropic snapshot ID.",
+      "efforts": ["low", "medium", "high"],
+      "availableEfforts": ["low", "medium", "high", "xhigh", "max"],
+      "rates": {"input": 8, "output": 40, "cachedRead": 0.20, "cachedWrite": 10},
+      "notes": "Cache writes use the 5-minute list rate. Claude Mythos 5.2 requires access approval.",
+      "sources": [
+        "https://platform.claude.com/docs/en/models/fable-5-2/overview",
+        "https://platform.claude.com/docs/en/build-with-claude/effort",
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions"
+      ]
+    },
+    "anthropic-cheap": {
+      "vendor": "anthropic",
+      "tier": "cheap",
+      "id": "claude-haiku-5-5",
+      "api": "anthropic",
+      "version": "Canonical pinned Anthropic snapshot ID.",
+      "efforts": ["low", "medium", "high"],
+      "availableEfforts": ["low", "medium", "high", "xhigh", "max"],
+      "maxPromptTokens": 100000,
+      "rates": {"input": 0.10, "output": 0.50, "cachedRead": 0.01, "cachedWrite": 0.125},
+      "notes": "Cache writes use the 5-minute list rate. Rates increase above the configured prompt bracket.",
+      "sources": [
+        "https://platform.claude.com/docs/en/models/haiku-5-5/overview",
+        "https://platform.claude.com/docs/en/build-with-claude/effort",
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions"
+      ]
+    },
+    "gemini-top": {
+      "vendor": "gemini",
+      "tier": "top",
+      "id": "gemini-4-carbon",
+      "api": "gemini",
+      "version": "Published stable model ID. No separate dated snapshot listed.",
+      "efforts": ["low", "medium", "high"],
+      "availableEfforts": ["low", "medium", "high"],
+      "rates": {"input": 2, "output": 10, "cachedRead": 0.10},
+      "futureRates": {"effectiveOn": "2026-12-01", "input": 4, "output": 20, "cachedRead": 0.20},
+      "sources": [
+        "https://aistudio.google.com/docs/models/gemini-4-carbon",
+        "https://aistudio.google.com/docs/pricing#gemini-4-carbon",
+        "https://aistudio.google.com/docs/thinking#token-limits"
+      ]
+    },
+    "gemini-cheap": {
+      "vendor": "gemini",
+      "tier": "cheap",
+      "id": "gemini-3.1-flash-lite",
+      "api": "gemini",
+      "version": "Published stable model ID. No separate dated snapshot listed.",
+      "efforts": ["minimal", "medium", "high"],
+      "availableEfforts": ["minimal", "low", "medium", "high"],
+      "rates": {"input": 0.25, "output": 1.50, "cachedRead": 0.025},
+      "notes": "Gemini 2.5 Flash-Lite access is restricted to prior active users. Gemini 3.5 Flash-Lite costs more for text input and output.",
+      "sources": [
+        "https://aistudio.google.com/docs/models/gemini-3.1-flash-lite",
+        "https://aistudio.google.com/docs/pricing#gemini-3.1-flash-lite",
+        "https://aistudio.google.com/docs/thinking#token-limits"
+      ]
+    },
+    "qwen-top": {
+      "vendor": "qwen",
+      "tier": "top",
+      "id": "qwen3.8-max-0902",
+      "api": "qwen-responses",
+      "version": "September 2, 2026 snapshot. Both snapshot names are published. Use the name listed in the Responses reference.",
+      "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/",
+      "baseUrlEnv": "DASHSCOPE_SINGAPORE_BASE_URL",
+      "baseUrlContract": "https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+      "efforts": ["low", "medium", "xhigh"],
+      "availableEfforts": ["none", "low", "medium", "xhigh"],
+      "rates": {"input": 2, "output": 6, "cachedRead": 0.25},
+      "notes": "The workspace-specific Singapore base URL is an optional override. Cache read rate is for implicit cache. The Qwen 4 Max preview requires a separate Token Plan and expires November 25, 2026.",
+      "sources": [
+        "https://www.alibabacloud.com/help/en/model-studio/qwen3-8-max",
+        "https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses",
+        "https://www.alibabacloud.com/help/en/model-studio/token-plan-personal-overview"
+      ]
+    },
+    "qwen-cheap": {
+      "vendor": "qwen",
+      "tier": "cheap",
+      "id": "qwen3.7-flash-2026-07-15",
+      "api": "qwen-chat",
+      "version": "Dated Qwen snapshot.",
+      "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/",
+      "efforts": ["none", 1024, 4096],
+      "availableEfforts": {
+        "disabled": "enable_thinking=false",
+        "enabled": "enable_thinking=true with a positive integer thinking_budget",
+        "maxThinkingTokens": 131072
+      },
+      "maxPromptTokens": 32000,
+      "rates": {"input": 0.03, "output": 0.13, "cachedRead": 0.006},
+      "notes": "The middle and high settings use explicit study-selected thinking budgets in tokens. Cache read rate is for implicit cache. Rates increase above the configured prompt bracket.",
+      "sources": [
+        "https://www.alibabacloud.com/help/en/model-studio/qwen3-7-flash",
+        "https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions",
+        "https://www.alibabacloud.com/help/en/model-studio/deep-thinking"
+      ]
+    }
+  }
+}

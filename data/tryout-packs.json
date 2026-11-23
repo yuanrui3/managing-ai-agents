@@ -1,0 +1,152 @@
+{
+  "packs": [
+    {
+      "id": "tryout-01",
+      "split": "tryout",
+      "difficulty": "easy",
+      "topic": "Range of a projectile on level ground",
+      "task": "Launch a point mass from level ground at speed speed_m_s and angle angle_deg above horizontal under constant downward acceleration gravity_m_s2. Ignore air resistance. Find the horizontal distance in metres to its first return to ground after launch.",
+      "unit": "m",
+      "primary": {
+        "parameters": {
+          "speed_m_s": 16,
+          "angle_deg": 35,
+          "gravity_m_s2": 9.81
+        },
+        "reference": 24.522050042935
+      },
+      "secondary": {
+        "parameters": {
+          "speed_m_s": 20,
+          "angle_deg": 52,
+          "gravity_m_s2": 9.81
+        },
+        "reference": 39.563536239592
+      },
+      "tolerance": 0.03,
+      "picture_checklist": [
+        "Level ground with launch and landing at the same height",
+        "Launch velocity and its angle marked relative to horizontal",
+        "Trajectory and horizontal range from launch to landing"
+      ]
+    },
+    {
+      "id": "tryout-02",
+      "split": "tryout",
+      "difficulty": "easy",
+      "topic": "Equivalent resistance of a series-parallel circuit",
+      "task": "An ideal two-terminal network has one resistor of resistance series_ohm in series with two resistors of resistances branch_a_ohm and branch_b_ohm in parallel. Find the equivalent DC resistance in ohms seen at the two outer terminals. Treat connecting wires as ideal.",
+      "unit": "ohm",
+      "primary": {
+        "parameters": {
+          "series_ohm": 40,
+          "branch_a_ohm": 120,
+          "branch_b_ohm": 180
+        },
+        "reference": 112
+      },
+      "secondary": {
+        "parameters": {
+          "series_ohm": 75,
+          "branch_a_ohm": 150,
+          "branch_b_ohm": 330
+        },
+        "reference": 178.125
+      },
+      "tolerance": 0.1,
+      "picture_checklist": [
+        "Two clearly marked external terminals",
+        "Two resistors connected between the same pair of nodes",
+        "The third resistor in series with the entire parallel pair"
+      ]
+    },
+    {
+      "id": "tryout-03",
+      "split": "tryout",
+      "difficulty": "easy",
+      "topic": "Image distance of a converging thin lens",
+      "task": "An upright object is object_distance_cm to the left of a converging thin lens in air with focal length focal_length_cm. Use the paraxial thin-lens model. Find the positive distance in centimetres from the lens to the real image on its right.",
+      "unit": "cm",
+      "primary": {
+        "parameters": {
+          "object_distance_cm": 30,
+          "focal_length_cm": 12
+        },
+        "reference": 20
+      },
+      "secondary": {
+        "parameters": {
+          "object_distance_cm": 28,
+          "focal_length_cm": 16
+        },
+        "reference": 37.333333333333
+      },
+      "tolerance": 0.03,
+      "picture_checklist": [
+        "Converging lens and optical axis",
+        "Upright object on the incoming side and inverted real image on the outgoing side",
+        "At least two principal rays agreeing at the image"
+      ]
+    },
+    {
+      "id": "tryout-04",
+      "split": "tryout",
+      "difficulty": "medium",
+      "topic": "Charging time of an RC circuit",
+      "task": "At time zero, a constant ideal DC source is connected through a resistor resistance_ohm to an initially uncharged capacitor capacitance_f in a series circuit. Find the time in seconds until the capacitor voltage first reaches voltage_fraction of its final voltage.",
+      "unit": "s",
+      "primary": {
+        "parameters": {
+          "resistance_ohm": 4700,
+          "capacitance_f": 0.00022,
+          "voltage_fraction": 0.8
+        },
+        "reference": 1.6641588014569
+      },
+      "secondary": {
+        "parameters": {
+          "resistance_ohm": 8200,
+          "capacitance_f": 0.00033,
+          "voltage_fraction": 0.65
+        },
+        "reference": 2.8408186688934
+      },
+      "tolerance": 0.005,
+      "picture_checklist": [
+        "Source, resistor, and capacitor in a single series circuit",
+        "Charging begins at switch closure or a clearly shown voltage step",
+        "The measured capacitor voltage or its target fraction is marked"
+      ]
+    },
+    {
+      "id": "tryout-05",
+      "split": "tryout",
+      "difficulty": "hard",
+      "topic": "Finite-amplitude pendulum period",
+      "task": "An ideal simple pendulum of length length_m swings in a vertical plane under gravity_m_s2. The point mass is released from rest at amplitude_deg measured from the downward vertical. Find its first full period in seconds using the exact gravitational torque.",
+      "unit": "s",
+      "primary": {
+        "parameters": {
+          "length_m": 0.8,
+          "gravity_m_s2": 9.81,
+          "amplitude_deg": 50
+        },
+        "reference": 1.8836051859553
+      },
+      "secondary": {
+        "parameters": {
+          "length_m": 1.2,
+          "gravity_m_s2": 9.81,
+          "amplitude_deg": 95
+        },
+        "reference": 2.6481119274945
+      },
+      "tolerance": 0.004,
+      "picture_checklist": [
+        "Fixed suspension point and a bob at fixed distance from it",
+        "Release angle measured from the downward vertical",
+        "Swing arc and both turning points"
+      ]
+    }
+  ]
+}
