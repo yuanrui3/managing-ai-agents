@@ -138,7 +138,7 @@ async function scoreWorkers(roster) {
     const { text, ...usage } = response;
     group.calls[skill] = usage;
     if (response.status === 'ok') {
-      try { group.parts[skill] = parseSkillResponse(text, skill); }
+      try { group.parts[skill] = parseSkillResponse(text, skill, roster.simulationProtocol ?? originalSimulationProtocol); }
       catch (error) { if (!(error instanceof SyntaxError)) throw error; }
     }
     groups.set(key, group);

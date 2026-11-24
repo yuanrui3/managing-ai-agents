@@ -10,7 +10,6 @@ const empty = result => ({ locals: [], body: [], result });
 test('the historical simulation format remains frozen', () => {
   assert.equal(createHash('sha256').update(legacySimulationFormat).digest('hex'),
     '7656b8832811c7d027b9546ea73943406c00f1af0ba6237df74e8528b8e5732d');
-  assert.ok(simulationFormat.startsWith(`${legacySimulationFormat}\n`));
 });
 
 test('the worked example extracted from the simulation prompt executes on changed inputs', async () => {
@@ -18,11 +17,13 @@ test('the worked example extracted from the simulation prompt executes on change
     primary: { parameters: { x: 2, gain: 3, bias: 1 } } };
   const prompt = skillPrompt(pack, 'simulation');
   assert.ok(prompt.includes(simulationFormat));
-  const match = /Complete example reply:\n(\{[^\n]+\})\n/.exec(prompt);
+  const match = /Complete example reply for a direct calculation:\n(\{[^\n]+\})\n/.exec(prompt);
   assert.ok(match, 'The prompt must include a complete executable JSON example.');
   const program = parseSkillResponse(match[1], 'simulation');
   assert.equal((await runSimulation(program, pack.primary.parameters, requireInput)).value, 7);
   assert.equal((await runSimulation(program, { x: 4, gain: 3, bias: 1 }, requireInput)).value, 13);
+  const loop = parseSkillResponse(/Loop example for accumulating amount over count steps: (\{[^\n]+\})/.exec(prompt)[1], 'simulation');
+  assert.equal((await runSimulation(loop, { count: 3, amount: 7 }, requireInput)).value, 21);
 });
 
 test('input qualification rejects fixed results while preserving historical constant execution', async () => {

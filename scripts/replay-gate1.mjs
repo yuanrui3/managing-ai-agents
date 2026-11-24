@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { evaluatePack, parseSkillResponse, skills } from '../src/pilot.mjs';
+import { evaluatePack, originalSimulationProtocol, parseSkillResponse, skills } from '../src/pilot.mjs';
 
 const [stamp] = process.argv.slice(2);
 if (process.argv.length !== 3 || !/^gate1-[0-9TZ-]+-[a-f0-9]{8}$/.test(stamp)) {
@@ -27,7 +27,7 @@ try {
     for (const skill of skills) {
       try {
         const response = await readFile(join(root, stamp, pack.id, `${skill}.response.txt`), 'utf8');
-        parts[skill] = parseSkillResponse(response, skill);
+        parts[skill] = parseSkillResponse(response, skill, originalSimulationProtocol);
       } catch (error) {
         if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
       }

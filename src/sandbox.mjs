@@ -35,6 +35,7 @@ const mathNames = Object.keys(mathFunctions);
 const unaryOps = { abs: 0x99, neg: 0x9a, ceil: 0x9b, floor: 0x9c, trunc: 0x9d, sqrt: 0x9f };
 const binaryOps = { '+': 0xa0, '-': 0xa1, '*': 0xa2, '/': 0xa3, min: 0xa4, max: 0xa5 };
 const compareOps = { '==': 0x61, '!=': 0x62, '<': 0x63, '>': 0x64, '<=': 0x65, '>=': 0x66 };
+export const formulaFunctionNames = [...Object.keys(unaryOps), 'min', 'max', ...mathNames];
 
 export const legacySimulationFormat = [
   'Simulation must be an object with exactly three fields: locals (array of names), body (array of statements), result (expression).',
@@ -48,23 +49,20 @@ export const legacySimulationFormat = [
   'Use the same program for both parameter sets. The runner prints the final result as a single number.',
 ].join('\n');
 
-const exampleProgram = {
-  locals: ['product'],
-  body: [['set', 'product', ['*', 'gain', 'x']]],
-  result: ['+', 'product', 'bias'],
-};
-
 export const simulationFormat = [
-  legacySimulationFormat,
-  'Use nested expression arrays, not infix strings: ["+", ["*", "gain", "x"], "bias"], never "gain*x+bias".',
-  'Declare every assignment target in locals. Inputs are read-only; copy an input into a local before changing it. Unassigned locals stay 0.',
-  'Initialize loop counters, check the initial inequality, and advance counters so the condition becomes false within the instruction budget.',
-  'Operators have fixed arity. For three factors use ["*", ["*", "a", "b"], "c"]. There is no rand, factorial, sum, or pi operator; use supported operations and numeric constants.',
-  'Compute the result from named inputs, not a fixed answer or placeholder 0. An empty body is valid when result itself uses input expressions.',
-  'Worked example for unrelated toy arithmetic: compute gain*x+bias. Inputs {"x":2,"gain":3,"bias":1} give 7.',
-  'Complete example reply:',
-  JSON.stringify({ simulation: exampleProgram }),
-  'The same example with {"x":4,"gain":3,"bias":1} gives 13. Adapt the method and names to the actual task.',
+  'Prefer a single arithmetic formula when it solves the task. Write it as ordinary math inside a JSON string.',
+  'Use the exact input names, decimal constants, parentheses, +, -, *, / and ^ for powers. Multiply explicitly. ' +
+    `Functions: ${formulaFunctionNames.join(', ')}. Use function calls like sqrt(x).`,
+  'If the problem requires a loop, you can return {"simulation":{"locals":[...],"body":[...],"result":...}} instead.',
+  'In this program form, write expressions as nested arrays such as ["+", ["*", "gain", "x"], "bias"]. ' +
+    'Use ["set", localName, expression], ["while", condition, statementArray], or ["if", condition, trueStatementArray, falseStatementArray]. ' +
+    'Comparisons use ==, !=, <, >, <= or >=. All assignments must name a declared local. Locals start at zero.',
+  'Loop example for accumulating amount over count steps: ' +
+    '{"simulation":{"locals":["i","total"],"body":[["while",["<","i","count"],[["set","total",["+","total","amount"]],["set","i",["+","i",1]]]]],"result":"total"}}',
+  `Check the initial loop condition and update it each iteration. The sandbox allows ${fuelLimit} executed statements and loop iterations.`,
+  'Complete example reply for a direct calculation:',
+  '{"simulation":{"formula":"gain * x + bias"}}',
+  'This example gives 7 for x=2, gain=3, bias=1, and 13 when x changes to 4. Use the relationship and input names of the actual task.',
 ].join('\n');
 
 const f64 = 0x7c;

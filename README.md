@@ -17,15 +17,19 @@ The tryout fixtures are in `data/tryout-packs.json`. The first release keeps the
 
 ### Checking a simulation
 
+For a direct calculation, the worker can return a formula such as `{"simulation":{"formula":"gain * x + bias"}}`. A bounded arithmetic parser converts the formula to the same sandbox program used for loops and conditionals. The scorer then runs that program with each set of numeric inputs.
+
 New open-weight runs show the worker a complete example reply and run its submission in the CPU sandbox on the inputs stated in the question. A malformed reply, fixed-answer placeholder, sandbox error, or wrong number triggers one repair attempt during pack assembly, subject to the same call, time, and compute limits. Both the solo worker and the team get this opportunity. The repair receives the parser or sandbox error, or the number its own program returned. The controller keeps the first draft on a tie. After selecting a program, the scorer checks it on the original inputs and on the private changed inputs.
 
 Run the worked example, failure cases, and end-to-end repair fixtures from the repository root with the following command.
 
 ```powershell
-node --test test/simulation-format.test.mjs test/simulation-repair.test.mjs test/local-main.test.mjs
+node --test test/simulation-format.test.mjs test/simulation-formula.test.mjs test/simulation-repair.test.mjs test/local-main.test.mjs
 ```
 
 The fixtures use scripted worker replies and the real CPU sandbox. New price lists measure first attempts on both inputs. For a team repair, the manager can choose a worker. By default the controller switches workers when another setting has a higher two-case tryout pass rate. A solo repair stays with the solo model. The pinned roster records the simulation protocol so that resuming a historical study uses its original prompts and call schedule.
+
+In a separate CPU-only check on the public circuit tryout, Qwen3-VL-4B-Instruct produced malformed JSON twice with the nested program format. With the formula option, its first reply computed 112 Ω on the stated inputs and 178.125 Ω on the withheld inputs. This check covered one simulation.
 
 ## Pilot preparation with the local study files
 

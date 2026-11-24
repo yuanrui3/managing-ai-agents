@@ -170,7 +170,7 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
         const text = await ask(setting, 'worker', `${skillPrompt(pack, skill, simulationProtocol)}\nOmit mentions of your identity, model, and provider.${prior}`,
           outputLimit[skill], `${skill}/${attempt}`);
         if (typeof text !== 'string') continue;
-        try { artifacts[skill] = parseSkillResponse(text, skill); }
+        try { artifacts[skill] = parseSkillResponse(text, skill, simulationProtocol); }
         catch (error) { if (!(error instanceof SyntaxError)) throw error; }
       }
     }

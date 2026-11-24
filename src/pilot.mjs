@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { GatewayError } from './gateway.mjs';
 import { diagramFormat, renderDiagram } from './diagram.mjs';
 import { legacySimulationFormat, runSimulation, simulationFormat } from './sandbox.mjs';
+import { formulaProgram } from './simulation-formula.mjs';
 
 export const originalSimulationProtocol = 'original-v1';
 export const checkedSimulationProtocol = 'checked-v2';
@@ -18,10 +19,12 @@ export function skillPrompt(pack, skill, simulationProtocol = checkedSimulationP
   if (![originalSimulationProtocol, checkedSimulationProtocol].includes(simulationProtocol)) {
     throw new Error(`Unknown simulation protocol: ${simulationProtocol}`);
   }
-  const format = simulationProtocol === originalSimulationProtocol ? legacySimulationFormat : simulationFormat;
-  const instruction = skill === 'simulation'
-    ? `Write a numerical simulation that computes the requested scalar from the named parameters, and works when their values change. Approximate the underlying setup numerically where applicable. Return {"simulation":PROGRAM}. PROGRAM follows this format:\n${format}`
-    : instructions[skill];
+  let instruction = instructions[skill];
+  if (skill === 'simulation') {
+    instruction = simulationProtocol === originalSimulationProtocol
+      ? `Write a numerical simulation that computes the requested scalar from the named parameters, and works when their values change. Approximate the underlying setup numerically where applicable. Return {"simulation":PROGRAM}. PROGRAM follows this format:\n${legacySimulationFormat}`
+      : `Compute the requested scalar from the named inputs so that the same calculation works when their values change. Check the units and a simple limiting case before answering.\n${simulationFormat}`;
+  }
   return `Produce the ${skill} part of a physics or maths explainer pack.
 Topic: ${pack.topic}
 Task: ${pack.task}
@@ -81,10 +84,14 @@ export async function evaluatePack(pack, parts, { includeSecondary = true } = {}
 
 export const outputLimit = { article: 2300, derivation: 1800, simulation: 2600, illustration: 3500 };
 
-export function parseSkillResponse(text, skill) {
+export function parseSkillResponse(text, skill, simulationProtocol = checkedSimulationProtocol) {
   const json = text.trim().replace(/^```(?:json)?\s*\n|\n```$/gi, '');
   const part = JSON.parse(json)?.[skill];
   if (part === undefined || part === null) throw new SyntaxError('Missing part in JSON response.');
+  if (skill === 'simulation' && simulationProtocol === checkedSimulationProtocol && Object.hasOwn(part, 'formula')) {
+    if (Object.keys(part).length !== 1) throw new SyntaxError('Use either a formula alone or a program with locals, body, and result.');
+    return formulaProgram(part.formula);
+  }
   return part;
 }
 
@@ -127,7 +134,7 @@ export async function runGatePack({ gateway, pack, dir, setting, efforts, seed, 
         caller: `gate1/${skill}`, seed: seed + index, outputLimit: outputLimit[skill] });
       production[skill] = { callId: response.id, latencyMs: response.latencyMs, costUsd: response.costUsd };
       await writeFile(join(dir, `${skill}.response.txt`), response.text, 'utf8');
-      parts[skill] = parseSkillResponse(response.text, skill);
+      parts[skill] = parseSkillResponse(response.text, skill, originalSimulationProtocol);
     } catch (error) {
       if (error instanceof GatewayError) {
         production[skill] = { error: error.message, code: error.code, httpStatus: error.httpStatus };

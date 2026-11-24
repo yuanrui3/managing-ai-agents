@@ -22,9 +22,11 @@ const pack = {
 
 const program = result => ({ locals: [], body: [], result });
 const simulation = result => JSON.stringify({ simulation: result });
+const formulaReply = formula => simulation({ formula });
 const distance = ['*', 'speed', 'seconds'];
 const correct = program(distance);
 const incorrect = program(['+', distance, 1]);
+const correctFormula = formulaReply('speed * seconds');
 const firstSetting = 'alpha-top-d0';
 const revisedSetting = 'beta-top-d0';
 
@@ -85,6 +87,45 @@ test('solo repairs malformed, placeholder, unsupported, and wrong primary simula
       assert.equal(trace.result.checks.simulation_secondary, true);
     });
   }
+});
+
+test('a worker formula is normalized to the existing program on the first try', async () => {
+  const { trace, simCalls } = await runFixture({ first: correctFormula });
+  assert.deepEqual(simCalls, ['alpha-top']);
+  assert.deepEqual(trace.parts.simulation, correct);
+  assert.equal(trace.result.checks.simulation_primary, true);
+  assert.equal(trace.result.checks.simulation_secondary, true);
+});
+
+test('the repair call can replace a malformed or inaccurate formula with a correct one', async t => {
+  const cases = [
+    { name: 'unclosed parenthesis', expression: '(speed * seconds', diagnostic: /Missing closing '\)' at character \d+\./ },
+    { name: 'incorrect result', expression: 'speed * seconds + 1', diagnostic: /outside the required tolerance/ },
+  ];
+  for (const { name, expression, diagnostic } of cases) {
+    await t.test(name, async () => {
+      const first = formulaReply(expression);
+      const { trace, prompts, simCalls } = await runFixture({ first, retry: correctFormula });
+      assert.deepEqual(simCalls, ['alpha-top', 'alpha-top']);
+      assert.deepEqual(trace.parts.simulation, correct);
+      assert.equal(trace.result.checks.simulation_primary, true);
+      assert.equal(trace.result.checks.simulation_secondary, true);
+      const { prompt } = prompts.find(({ label }) => label === 'simulation/2');
+      const prefix = 'Validation feedback: ';
+      const feedback = prompt.split('\n').find(line => line.startsWith(prefix));
+      assert.ok(feedback);
+      assert.match(JSON.parse(feedback.slice(prefix.length)), diagnostic);
+    });
+  }
+});
+
+test('JavaScript-style property access and raw script replies are rejected as formulas', async () => {
+  const { trace, simCalls } = await runFixture({ first: formulaReply('Math.abs(speed) * seconds'),
+    retry: 'return speed * seconds;' });
+  assert.deepEqual(simCalls, ['alpha-top', 'alpha-top']);
+  assert.equal(Object.hasOwn(trace.parts, 'simulation'), false);
+  assert.equal(trace.result.checks.simulation_primary, false);
+  assert.equal(trace.result.checks.simulation_secondary, false);
 });
 
 test('a team can repair a failed simulation using the manager’s different eligible worker', async () => {
