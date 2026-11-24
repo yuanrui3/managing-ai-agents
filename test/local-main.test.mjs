@@ -107,3 +107,43 @@ test('a safe project budget stop records a partial cell and stops further dispat
   const started = JSON.parse(await readFile(join(options.traceDirectory, options.cell.id, 'started.json'), 'utf8'));
   assert.equal(trace.startedAt, new Date(started.startedAtMs).toISOString());
 });
+
+test('the repair uses the remaining cell allowance and replays through the same journal', async t => {
+  const { options, sent, controller } = await fixture(t, 'compute-cap');
+  options.limits = { ...limits, executionSeconds: 5 };
+  const dispatch = controller.invoke;
+  controller.invoke = async function(call) {
+    const reply = await dispatch.call(this, call);
+    const repair = call.request.prompt.includes('Validation feedback:');
+    const text = call.request.prompt.startsWith('Produce the simulation')
+      ? JSON.stringify({ simulation: { locals: [], body: [], result: repair ? 'value' : 0 } })
+      : reply.text;
+    return { ...reply, active_seconds: 1, text };
+  };
+  const first = await executeCell(options);
+  assert.equal(sent.length, 5);
+  assert.equal(first.calls.at(-1).label, 'simulation/2');
+  assert.equal(sent.at(-1).request.max_execution_seconds, 1);
+  assert.equal(first.activeSeconds, 5);
+  assert.equal(first.result.checks.simulation_secondary, true);
+  const replay = await executeCell({ ...options, resumed: true });
+  assert.equal(sent.length, 5);
+  assert.deepEqual(replay.records, first.records);
+  assert.deepEqual(replay.decisions, first.decisions);
+  assert.deepEqual(replay.result.checks, first.result.checks);
+});
+
+test('an exhausted cell records the refused simulation repair without dispatch', async t => {
+  const { options, sent, controller } = await fixture(t, 'compute-cap');
+  options.limits = { ...limits, executionSeconds: 4 };
+  const dispatch = controller.invoke;
+  controller.invoke = async function(call) {
+    const reply = await dispatch.call(this, call);
+    return { ...reply, active_seconds: 1 };
+  };
+  const trace = await executeCell(options);
+  assert.equal(sent.length, 4);
+  assert.equal(trace.calls.at(-1).label, 'simulation/2');
+  assert.equal(trace.calls.at(-1).telemetry.error_type, 'execution_cap');
+  assert.equal(trace.activeSeconds, 4);
+});

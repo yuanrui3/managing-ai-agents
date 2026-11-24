@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { LocalPilot, GpuBudgetStop, atomicJson, readProjectJson } from '../src/local-pilot.mjs';
 import { makePolicy, runTrial } from './calibrate-local.mjs';
+import { checkedSimulationProtocol, originalSimulationProtocol } from '../src/pilot.mjs';
 import { runMainPanel, writeMainReport } from './report-local-main.mjs';
 
 const studyId = 'qwen-team-vs-solo-84';
@@ -68,6 +69,7 @@ export function buildManifest(gate, packs, roster, priceList, pilotGpuSeconds, p
     panelAllocationSecondsPerEligibleCase: panelShare, apiUsd: 0,
     managerFamily: 'qwen', managerPolicy: 'manager-choice', visibility: 'told', repeats: 1,
     reviewPrompt: 'Concrete legal task keys and exact menu ID strings. At most one revision for each skill.',
+    ...(roster.simulationProtocol && { simulationProtocol: roster.simulationProtocol }),
     packIds, limits, cells, inputHashes: { roster: digest(roster), priceList: digest(priceList), packs: digest(selected) },
   };
 }
@@ -87,7 +89,8 @@ function isComputeCondition(condition) {
   return condition === 'compute-cap' || condition === 'one-gpu-slot';
 }
 
-export async function executeCell({ cell, pack, policy, controller, limits, panelReserve, traceDirectory, resumed }) {
+export async function executeCell({ cell, pack, policy, controller, limits, panelReserve, traceDirectory, resumed,
+  simulationProtocol = checkedSimulationProtocol }) {
   const folder = join(traceDirectory, cell.id);
   await mkdir(folder, { recursive: true });
   const start = await loadOrCreate(join(folder, 'started.json'), { startedAtMs: Date.now() });
@@ -193,7 +196,7 @@ export async function executeCell({ cell, pack, policy, controller, limits, pane
   const idPrefix = ('m84-' + cell.condition);
   const trace = await runTrial({ id: cell.id, pack, style: cell.style,
     managerFamily: cell.style === 'manager-and-workers' ? 'qwen' : undefined, idPrefix, policy, invoke,
-    clarifyReviewPrompt: true, cellStartedAtMs: start.startedAtMs, describeResources });
+    clarifyReviewPrompt: true, cellStartedAtMs: start.startedAtMs, describeResources, simulationProtocol });
   return { ...trace, condition: cell.condition, status: budgetTruncated ? 'budget-truncated' : 'complete',
     allocatedSeconds: chargedForCell(), resumed, panelReserveSeconds: panelReserve };
 }
@@ -257,6 +260,7 @@ async function main() {
         const eligibleSoFar = traces.filter(trace => typeof trace.parts.article === 'string' || trace.svg).length;
         const reserve = Math.ceil((eligibleSoFar + 1) * manifest.panelAllocationSecondsPerEligibleCase);
         const trace = await executeCell({ cell, pack: packById.get(cell.packId), policy, controller, limits: manifest.limits,
+          simulationProtocol: pinned.simulationProtocol ?? originalSimulationProtocol,
           panelReserve: reserve, traceDirectory, resumed: existsSync(join(traceDirectory, cell.id, 'started.json')) });
         await atomicJson(join(traceDirectory, cell.id, 'trace.json'), trace);
         traces.push(trace);

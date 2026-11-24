@@ -15,6 +15,18 @@ node scripts/plan-gpu.mjs --design-only data/open-weight-grid.json
 
 The tryout fixtures are in `data/tryout-packs.json`. The first release keeps the held-out questions and answer key, the reference calculation script, the local decision log, and the raw run archive out of Git.
 
+### Checking a simulation
+
+New open-weight runs show the worker a complete example reply and run its submission in the CPU sandbox on the inputs stated in the question. A malformed reply, fixed-answer placeholder, sandbox error, or wrong number triggers one repair attempt during pack assembly, subject to the same call, time, and compute limits. Both the solo worker and the team get this opportunity. The repair receives the parser or sandbox error, or the number its own program returned. The controller keeps the first draft on a tie. After selecting a program, the scorer checks it on the original inputs and on the private changed inputs.
+
+Run the worked example, failure cases, and end-to-end repair fixtures from the repository root with the following command.
+
+```powershell
+node --test test/simulation-format.test.mjs test/simulation-repair.test.mjs test/local-main.test.mjs
+```
+
+The fixtures use scripted worker replies and the real CPU sandbox. New price lists measure first attempts on both inputs. For a team repair, the manager can choose a worker. By default the controller switches workers when another setting has a higher two-case tryout pass rate. A solo repair stays with the solo model. The pinned roster records the simulation protocol so that resuming a historical study uses its original prompts and call schedule.
+
 ## Pilot preparation with the local study files
 
 The full runner needs the study's local `data/packs.json`. The local Gate 2 price list and calibration are in `runs/open-pilot/desktop-pilot-01/gate2.md`. The main run is in `runs/open-pilot/desktop-pilot-01/qwen-team-vs-solo-84/`. With those files present, `node scripts/run-local-main.mjs --plan` prints the held-out grid without launching inference.

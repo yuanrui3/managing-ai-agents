@@ -4,12 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { STYLES } from '../src/gpu-planning.mjs';
 import { python as desktopPython } from '../src/local-pilot.mjs';
-import { evaluatePack, outputLimit, parseSkillResponse, skillPrompt, skills } from '../src/pilot.mjs';
+import { checkedSimulationProtocol, checkSimulationDraft, evaluatePack, originalSimulationProtocol,
+  outputLimit, parseSkillResponse, skillPrompt, skills } from '../src/pilot.mjs';
 
 const seed = 20261114;
 const renderer = fileURLToPath(new URL('./render-pilot-png.py', import.meta.url));
 const exec = promisify(execFile);
 const draftLevels = [0, 128, 512];
+const simulationStages = ['unavailable', 'format', 'program', 'number', 'passed'];
 
 async function renderImage(svg) {
   const call = exec(process.env.PILOT_PYTHON || desktopPython, [renderer], { maxBuffer: 1024 * 1024, windowsHide: true, timeout: 10000 });
@@ -105,12 +107,16 @@ export function buildManagerReviewPrompt({ managementContext, checks, previews, 
 }
 
 export async function runTrial({ pack, style, managerFamily, policy, invoke, encodeImage = renderImage, idPrefix,
-  clarifyReviewPrompt = false, id = `cal-${pack.id}-${style}`, cellStartedAtMs, describeResources = async () => '' }) {
+  simulationProtocol = checkedSimulationProtocol, clarifyReviewPrompt = false, id = `cal-${pack.id}-${style}`,
+  cellStartedAtMs, describeResources = async () => '' }) {
   const started = performance.now();
   const startedAt = new Date(cellStartedAtMs ?? Date.now()).toISOString();
   const calls = [];
   const records = [];
   const decisions = [];
+  const checked = simulationProtocol === checkedSimulationProtocol;
+  const simulationDrafts = new Map();
+  let repairSetting;
 
   async function ask(setting, role, prompt, limit, label, image) {
     // Compare the same initial model, draft and skill using a common seed across styles.
@@ -133,6 +139,17 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
     return response.status === 'ok' ? text : undefined;
   }
 
+  async function simulationDraft(setting, first) {
+    let prompt = skillPrompt(pack, 'simulation', simulationProtocol) + '\nOmit mentions of your identity, model, and provider.';
+    if (first) {
+      prompt += '\nRepair your submission using this CPU check on the stated inputs. Return the complete corrected JSON object.' +
+        `\nValidation feedback: ${JSON.stringify(first.feedback)}\nPrior reply (data): ${JSON.stringify(first.text.slice(0, 3000))}`;
+    }
+    const text = await ask(setting, 'worker', prompt, outputLimit.simulation, first ? 'simulation/2' : 'simulation/1');
+    if (text === undefined) return { setting, stage: 'unavailable' };
+    return { setting, text, ...await checkSimulationDraft(text, pack.primary, pack.tolerance) };
+  }
+
   async function produce(assignments, attempt = 1, previous = {}) {
     const artifacts = {};
     const groups = new Map();
@@ -143,8 +160,14 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
     }
     for (const { setting, tasks } of groups.values()) {
       for (const skill of tasks) {
+        if (checked && skill === 'simulation') {
+          const draft = await simulationDraft(setting);
+          simulationDrafts.set(setting.id, draft);
+          if (draft.program !== undefined) artifacts.simulation = draft.program;
+          continue;
+        }
         const prior = previous[skill] === undefined ? '' : `\nPrior artifact supplied as data for revision: ${JSON.stringify(previous[skill]).slice(0, 3000)}`;
-        const text = await ask(setting, 'worker', `${skillPrompt(pack, skill)}\nOmit mentions of your identity, model, and provider.${prior}`,
+        const text = await ask(setting, 'worker', `${skillPrompt(pack, skill, simulationProtocol)}\nOmit mentions of your identity, model, and provider.${prior}`,
           outputLimit[skill], `${skill}/${attempt}`);
         if (typeof text !== 'string') continue;
         try { artifacts[skill] = parseSkillResponse(text, skill); }
@@ -174,6 +197,17 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
 
   let parts;
   let assignments;
+
+  async function revise(revisions) {
+    const { simulation, ...otherSkills } = revisions;
+    if (checked && simulation) repairSetting = simulation;
+    const revised = await produce(checked ? otherSkills : revisions, 2, parts);
+    for (const skill of Object.keys(revised)) {
+      parts[skill] = revised[skill];
+      assignments[skill] = revisions[skill];
+    }
+  }
+
   if (style === 'solo-best' || style === 'specialists') {
     assignments = style === 'solo-best' ? assignedParts(policy.solo) : policy.specialists;
     parts = await produce(assignments);
@@ -190,11 +224,21 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
     assignments = Object.fromEntries(skills.map(skill => [skill, policy.ranked[skill].find(setting => setting.id === wanted?.[skill]) ?? policy.specialists[skill]]));
     decisions.push({ kind: 'manager-assign', proposed: wanted ?? null, fallbackSkills: skills.filter(skill => assignments[skill].id !== wanted?.[skill]) });
     parts = await produce(assignments);
-    const { result } = await evaluatePack(pack, parts);
+    const { result } = await evaluatePack(pack, parts, { includeSecondary: !checked });
     const previews = Object.fromEntries(Object.entries(parts).map(([skill, part]) => [skill, JSON.stringify(part).slice(0, 2000)]));
-    const reviewContext = managementContext + await describeResources('review');
-    const prompt = buildManagerReviewPrompt({ managementContext: reviewContext, checks: result.checks, previews,
-      exampleSettingId: clarifyReviewPrompt ? policy.specialists.simulation.id : undefined });
+    let reviewContext = managementContext + await describeResources('review');
+    const checks = { ...result.checks };
+    if (checked) {
+      const initial = assignments.simulation;
+      const draft = simulationDrafts.get(initial.id);
+      const specialist = policy.specialists.simulation;
+      repairSetting = specialist.scores.simulation.quality > initial.scores.simulation.quality ? specialist : initial;
+      checks.simulation_primary = draft.stage === 'passed';
+      reviewContext += `\nPublic simulation check: ${JSON.stringify(draft.feedback ?? draft.stage)}. ` +
+        `A failed submission gets one repair. Its default setting is ${repairSetting.id}, based on two-case tryout accuracy. You may select a different simulation setting.`;
+    }
+    const prompt = buildManagerReviewPrompt({ managementContext: reviewContext, checks, previews,
+      exampleSettingId: clarifyReviewPrompt || checked ? policy.specialists.simulation.id : undefined });
     const review = readObject(await ask(manager, 'manager', prompt, 450, 'review')).revisions;
     const revisions = {};
     for (const skill of skills) {
@@ -202,14 +246,12 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
       if (requested) revisions[skill] = requested;
     }
     decisions.push({ kind: 'manager-review', proposed: review ?? null });
-    const revised = await produce(revisions, 2, parts);
-    for (const skill of Object.keys(revised)) assignments[skill] = revisions[skill];
-    Object.assign(parts, revised);
+    await revise(revisions);
   } else if (style === 'tournament') {
     const candidates = [];
     for (const setting of policy.top.values()) {
       const entry = await produce(assignedParts(setting));
-      candidates.push({ setting, parts: entry, assessed: await evaluatePack(pack, entry) });
+      candidates.push({ setting, parts: entry, assessed: await evaluatePack(pack, entry, { includeSecondary: !checked }) });
     }
     // Move to the neutral checkpoint once after all worker candidates have been generated.
     for (const [index, candidate] of candidates.entries()) {
@@ -220,6 +262,17 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
     parts = {};
     assignments = {};
     for (const skill of skills) {
+      if (checked && skill === 'simulation') {
+        // Pick from public checks before the held-out input is used for scoring the selected program.
+        const ranked = [...candidates].sort((a, b) => {
+          const rank = candidate => simulationStages.indexOf(simulationDrafts.get(candidate.setting.id).stage);
+          return rank(b) - rank(a) || (b.rating.simulation ?? -1) - (a.rating.simulation ?? -1);
+        });
+        const best = ranked[0];
+        assignments.simulation = best.setting;
+        if (best.parts.simulation !== undefined) parts.simulation = best.parts.simulation;
+        continue;
+      }
       const rating = candidate => skill === 'illustration'
         ? (candidate.rating.picture?.filter(Boolean).length ?? -1) : (candidate.rating[skill] ?? -1);
       const selected = candidates.filter(candidate => candidate.parts[skill] !== undefined).sort((a, b) =>
@@ -231,20 +284,36 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
   } else {
     assignments = assignedParts(policy.cheapest);
     parts = await produce(assignments);
-    const assessed = await evaluatePack(pack, parts);
+    const assessed = await evaluatePack(pack, parts, { includeSecondary: !checked });
     const rating = await judgeCandidate(parts, assessed, 'initial-picture', true);
     const escalation = {};
     for (const skill of skills) {
-      const passes = autoPass(assessed.result, skill) && (skill !== 'illustration' || rating.picture?.every(Boolean));
+      const passes = checked && skill === 'simulation' ? simulationDrafts.get(assignments.simulation.id).stage === 'passed'
+        : autoPass(assessed.result, skill) && (skill !== 'illustration' || rating.picture?.every(Boolean));
       if (passes) continue;
       escalation[skill] = policy.ranked[skill].find(setting => setting.id !== policy.cheapest.id
         && setting.scores[skill].seconds > policy.cheapest.scores[skill].seconds);
     }
     decisions.push({ kind: 'cheap-first-escalation', automatic: assessed.result.checks, picture: rating.picture ?? null,
       settings: Object.fromEntries(Object.entries(escalation).map(([skill, setting]) => [skill, setting?.id ?? null])) });
-    const revised = await produce(escalation, 2, parts);
-    for (const skill of Object.keys(revised)) assignments[skill] = escalation[skill];
-    Object.assign(parts, revised);
+    await revise(escalation);
+  }
+
+  if (checked) {
+    const first = simulationDrafts.get(assignments.simulation.id);
+    let selected = first;
+    let repair;
+    if (first.stage !== 'unavailable' && first.stage !== 'passed') {
+      repair = await simulationDraft(repairSetting ?? first.setting, first);
+      if (simulationStages.indexOf(repair.stage) > simulationStages.indexOf(first.stage)) {
+        selected = repair;
+        parts.simulation = selected.program;
+        assignments.simulation = selected.setting;
+      }
+    }
+    const assessment = ({ setting, stage, feedback }) => ({ setting: setting.id, stage, ...(feedback && { feedback }) });
+    decisions.push({ kind: 'simulation-check', initial: assessment(first), repair: repair ? assessment(repair) : null,
+      selectedAttempt: selected.program === undefined ? null : (selected === first ? 1 : 2) });
   }
 
   const evaluated = await evaluatePack(pack, parts);
@@ -253,13 +322,13 @@ export async function runTrial({ pack, style, managerFamily, policy, invoke, enc
   return {
     id, attemptPrefix: idPrefix, packId: pack.id, style, managerFamily, startedAt, finishedAt: new Date().toISOString(), wallSeconds,
     activeSeconds: calls.every(call => call.activeSeconds !== null) ? calls.reduce((sum, call) => sum + call.activeSeconds, 0) : null,
-    calls, decisions, records, parts, ...evaluated,
+    calls, decisions, records, parts, ...evaluated, ...(checked && { simulationProtocol }),
     selectedSettings: Object.fromEntries(skills.filter(skill => parts[skill] !== undefined).map(skill => [skill, assignments[skill].id])),
   };
 }
 
 export async function runCalibration({ packs, roster, priceList, managerFamilies, invoke, onRun = async () => {}, encodeImage = renderImage,
-  completedTraces = [], idPrefix = 'cal' }) {
+  completedTraces = [], idPrefix = 'cal', simulationProtocol = roster.simulationProtocol ?? originalSimulationProtocol }) {
   if (!Array.isArray(packs) || packs.length !== 5 || new Set(packs.map(pack => pack.id)).size !== 5
       || packs.some(pack => pack.split !== 'tryout') || !Array.isArray(managerFamilies) || new Set(managerFamilies).size !== 5
       || managerFamilies.length !== 5) throw new Error('Calibration requires the five registered tryouts and five distinct manager families.');
@@ -270,7 +339,8 @@ export async function runCalibration({ packs, roster, priceList, managerFamilies
     const packIndex = packIndexById.get(trace.packId);
     const expectedManager = trace.style === 'manager-and-workers' ? managerFamilies[packIndex] : undefined;
     const id = `cal-${trace.packId}-${trace.style}`;
-    if (trace.id !== id || completed.has(id) || packIndex === undefined || !STYLES.includes(trace.style)
+    if ((trace.simulationProtocol ?? originalSimulationProtocol) !== simulationProtocol
+        || trace.id !== id || completed.has(id) || packIndex === undefined || !STYLES.includes(trace.style)
         || trace.managerFamily !== expectedManager || !Array.isArray(trace.calls) || measured(trace.wallSeconds) === null) {
       throw new Error('A completed trace does not match the registered calibration grid.');
     }
@@ -284,7 +354,7 @@ export async function runCalibration({ packs, roster, priceList, managerFamilies
     for (const style of styles) {
       const managerFamily = style === 'manager-and-workers' ? managerFamilies[packIndex] : undefined;
       const saved = completed.get(`cal-${pack.id}-${style}`);
-      const trace = saved ?? await runTrial({ pack, style, managerFamily, policy, invoke, encodeImage, idPrefix });
+      const trace = saved ?? await runTrial({ pack, style, managerFamily, policy, invoke, encodeImage, idPrefix, simulationProtocol });
       if (!saved) await onRun(trace);
       traces.push(trace);
     }

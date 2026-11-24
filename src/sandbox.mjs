@@ -36,7 +36,7 @@ const unaryOps = { abs: 0x99, neg: 0x9a, ceil: 0x9b, floor: 0x9c, trunc: 0x9d, s
 const binaryOps = { '+': 0xa0, '-': 0xa1, '*': 0xa2, '/': 0xa3, min: 0xa4, max: 0xa5 };
 const compareOps = { '==': 0x61, '!=': 0x62, '<': 0x63, '>': 0x64, '<=': 0x65, '>=': 0x66 };
 
-export const simulationFormat = [
+export const legacySimulationFormat = [
   'Simulation must be an object with exactly three fields: locals (array of names), body (array of statements), result (expression).',
   'Expressions are finite numeric literals, names of input parameters or locals, or arrays [operator, operand, ...].',
   `Unary operators: ${[...Object.keys(unaryOps), ...mathNames.filter((name) => mathFunctions[name].length === 1)].join(', ')}.`,
@@ -48,6 +48,25 @@ export const simulationFormat = [
   'Use the same program for both parameter sets. The runner prints the final result as a single number.',
 ].join('\n');
 
+const exampleProgram = {
+  locals: ['product'],
+  body: [['set', 'product', ['*', 'gain', 'x']]],
+  result: ['+', 'product', 'bias'],
+};
+
+export const simulationFormat = [
+  legacySimulationFormat,
+  'Use nested expression arrays, not infix strings: ["+", ["*", "gain", "x"], "bias"], never "gain*x+bias".',
+  'Declare every assignment target in locals. Inputs are read-only; copy an input into a local before changing it. Unassigned locals stay 0.',
+  'Initialize loop counters, check the initial inequality, and advance counters so the condition becomes false within the instruction budget.',
+  'Operators have fixed arity. For three factors use ["*", ["*", "a", "b"], "c"]. There is no rand, factorial, sum, or pi operator; use supported operations and numeric constants.',
+  'Compute the result from named inputs, not a fixed answer or placeholder 0. An empty body is valid when result itself uses input expressions.',
+  'Worked example for unrelated toy arithmetic: compute gain*x+bias. Inputs {"x":2,"gain":3,"bias":1} give 7.',
+  'Complete example reply:',
+  JSON.stringify({ simulation: exampleProgram }),
+  'The same example with {"x":4,"gain":3,"bias":1} gives 13. Adapt the method and names to the actual task.',
+].join('\n');
+
 const f64 = 0x7c;
 const i32 = 0x7f;
 const end = 0x0b;
@@ -56,6 +75,11 @@ const localSet = 0x21;
 
 function requireValid(valid, message) {
   if (!valid) throw new Error(message);
+}
+
+function diagnosticName(value) {
+  if (typeof value !== 'string') return `<${typeof value}>`;
+  return JSON.stringify(value.length > 64 ? `${value.slice(0, 64)}...` : value);
 }
 
 function unsignedLeb128(value) {
@@ -90,7 +114,7 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function compile(program, params) {
+function compile(program, params, requireInput = false) {
   requireValid(isObject(program) && Object.keys(program).length === 3 && Object.hasOwn(program, 'result')
     && Array.isArray(program.locals) && Array.isArray(program.body),
   'Simulation must contain locals, body, and result.');
@@ -104,9 +128,11 @@ function compile(program, params) {
   requireValid(Object.values(params).every(Number.isFinite), 'Simulation parameters must be finite numbers.');
 
   const indexes = new Map(names.map((name, index) => [name, unsignedLeb128(index)]));
+  const inputs = new Set(parameterNames);
   const locals = new Set(program.locals);
   const fuelIndex = unsignedLeb128(names.length);
   let nodeCount = 0;
+  let readsInput = false;
 
   function countNode(depth) {
     nodeCount += 1;
@@ -114,7 +140,8 @@ function compile(program, params) {
   }
 
   function requireArity(node, arity) {
-    requireValid(node.length === arity + 1, 'Simulation operator has the wrong arity.');
+    requireValid(node.length === arity + 1,
+      `Simulation operator ${diagnosticName(node[0])} has the wrong arity: expected ${arity} operands, got ${node.length - 1}.`);
   }
 
   function condition(value, depth) {
@@ -125,7 +152,8 @@ function compile(program, params) {
     countNode(depth);
     if (Number.isFinite(node)) return f64Constant(node);
     if (typeof node === 'string') {
-      requireValid(indexes.has(node), 'Simulation references an unknown name.');
+      requireValid(indexes.has(node), `Simulation references an unknown name ${diagnosticName(node)}.`);
+      if (inputs.has(node)) readsInput = true;
       return [localGet, ...indexes.get(node)];
     }
     requireValid(Array.isArray(node) && typeof node[0] === 'string', 'Invalid simulation expression.');
@@ -147,7 +175,7 @@ function compile(program, params) {
       requireArity(node, 2);
       return [...expression(left, depth + 1), ...expression(right, depth + 1), compareOps[operator], 0xb8];
     }
-    requireValid(Object.hasOwn(mathFunctions, operator), 'Simulation uses an unknown operator.');
+    requireValid(Object.hasOwn(mathFunctions, operator), `Simulation uses an unknown operator ${diagnosticName(operator)}.`);
     requireArity(node, mathFunctions[operator].length);
     const operands = node.slice(1).flatMap((operand) => expression(operand, depth + 1));
     return [...operands, 0x10, ...unsignedLeb128(mathNames.indexOf(operator))];
@@ -161,12 +189,12 @@ function compile(program, params) {
     requireValid(Array.isArray(nodes), 'Simulation statement block must be an array.');
     return nodes.flatMap((node) => {
       countNode(depth);
-      requireValid(Array.isArray(node), 'Invalid simulation statement.');
+      requireValid(Array.isArray(node), `Invalid simulation statement ${diagnosticName(node)}: expected an array.`);
       const [operator, first, second, third] = node;
       switch (operator) {
         case 'set':
           requireArity(node, 2);
-          requireValid(locals.has(first), 'Simulation can only assign to declared locals.');
+          requireValid(locals.has(first), `Simulation can only assign to declared locals: ${diagnosticName(first)}.`);
           return [...useFuel, ...expression(second, depth + 1), localSet, ...indexes.get(first)];
         case 'while':
           requireArity(node, 2);
@@ -179,7 +207,7 @@ function compile(program, params) {
             ...statements(second, depth + 1), ...whenFalse, end];
         }
         default:
-          throw new Error('Simulation uses an unknown statement.');
+          throw new Error(`Simulation uses an unknown statement ${diagnosticName(operator)}.`);
       }
     });
   }
@@ -196,6 +224,8 @@ function compile(program, params) {
   if (finalByte & 0x40) fuelImmediate.splice(-1, 1, finalByte | 0x80, 0);
   const code = [...vector(wasmLocals), 0x41, ...fuelImmediate, localSet, ...fuelIndex,
     ...statements(program.body, 1), ...expression(program.result, 1), end];
+  requireValid(!requireInput || (!Number.isFinite(program.result) && readsInput),
+    'Simulation must read a named input parameter and cannot use a fixed numeric result.');
   return Uint8Array.from([
     0, 0x61, 0x73, 0x6d, 1, 0, 0, 0,
     ...section(1, vector([type(1), type(2), type(parameterNames.length)])),
@@ -214,17 +244,18 @@ async function executeChild() {
     requireValid(size <= maxInputBytes, 'Simulation input exceeds the byte limit.');
     chunks.push(chunk);
   }
-  const { program, params } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  const binary = compile(program, params);
+  const { program, params, requireInput = false } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  const binary = compile(program, params, requireInput);
   const { instance } = await WebAssembly.instantiate(binary, { math: mathFunctions });
   const value = instance.exports.simulate(...Object.values(params));
   requireValid(Number.isFinite(value), 'Simulation result must be a finite number.');
   process.stdout.write(JSON.stringify(value));
 }
 
-export async function runSimulation(program, params, { timeoutMs = 3000 } = {}) {
+export async function runSimulation(program, params, { timeoutMs = 3000, requireInput = false } = {}) {
   requireValid(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 30000, 'Invalid sandbox timeout.');
-  const input = JSON.stringify({ program, params });
+  requireValid(typeof requireInput === 'boolean', 'Invalid simulation input requirement.');
+  const input = JSON.stringify({ program, params, ...(requireInput ? { requireInput: true } : {}) });
   requireValid(Buffer.byteLength(input) <= maxInputBytes, 'Simulation input exceeds the byte limit.');
   const directory = await mkdtemp(join(tmpdir(), 'agent-experiment-'));
   const start = performance.now();

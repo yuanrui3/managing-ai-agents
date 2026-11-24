@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { judgePrompt, mean, panelValue, renderPanelPng, skillScore } from '../src/blind-panel.mjs';
-import { evaluatePack, outputLimit, parseSkillResponse, skillPrompt, skills } from '../src/pilot.mjs';
+import { evaluatePack, originalSimulationProtocol, outputLimit, parseSkillResponse, skillPrompt, skills } from '../src/pilot.mjs';
 
 const here = new URL('.', import.meta.url);
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -83,18 +83,18 @@ async function readQueues(phase, roster) {
   return replies;
 }
 
-function workerTasks() {
+function workerTasks(roster) {
   return drafts.flatMap((draft, level) => packs.flatMap((pack, index) => skills.map((skill, part) => {
     const id = `${pack.id}-${skill}-${draft}`;
     return { id, packId: pack.id, skill, draft, request: { id, seed: seeds.worker + level * 100 + index * 10 + part,
-      prompt: skillPrompt(pack, skill) + '\nOmit mentions of your identity, model, and provider.',
+      prompt: skillPrompt(pack, skill, roster.simulationProtocol ?? originalSimulationProtocol) + '\nOmit mentions of your identity, model, and provider.',
       max_output_tokens: outputLimit[skill], draft_tokens: draft } };
   })));
 }
 
 async function retryWorkerOom(roster) {
   if (existsSync(phases('panel'))) throw new Error('Worker replies already fed into the blind panel.');
-  const tasks = new Map(workerTasks().map(task => [task.id, task]));
+  const tasks = new Map(workerTasks(roster).map(task => [task.id, task]));
   let count = 0;
   for (const model of roster.workers) {
     const queue = join(phases('workers'), model.id);
@@ -220,7 +220,7 @@ assertRoster(roster);
 if (command === 'prepare-workers') {
   await mkdir(root, { recursive: true });
   await writeFile(rosterFile, `${JSON.stringify(roster, null, 2)}\n`, { flag: 'wx' });
-  const tasks = workerTasks();
+  const tasks = workerTasks(roster);
   for (const model of roster.workers) await writeQueue('workers', model, tasks);
   console.log(`${tasks.length * roster.workers.length} prepared worker requests in ${root}`);
 } else if (command === 'retry-worker-oom') {
