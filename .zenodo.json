@@ -1,0 +1,17 @@
+{
+  "title": "Managing AI Agents: Comparing Manager-Led Teams and Solo Models on Physics and Mathematics Explainers",
+  "creators": [
+    {
+      "name": "Chen, Yuanrui"
+    }
+  ],
+  "description": "Study design, experimental software, scoring tools, and reports for a comparison of manager-led AI teams with solo models on physics and mathematics explainers. In the Qwen study, 81 of 84 planned runs were completed. The public archive excludes the private test questions, answer key, and raw run archive. Original software is licensed under MIT. Original reports and written study documentation are licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). Third-party material retains its original terms; see LICENSE and LICENSE-docs.md.",
+  "license": "mit",
+  "upload_type": "software",
+  "keywords": [
+    "AI agents",
+    "multi-agent systems",
+    "language model evaluation",
+    "scientific explanation"
+  ]
+}
